@@ -1,0 +1,13 @@
+# Speech recognition (CTranslate2 backend — no torch required)
+faster-whisper>=1.2
+
+# Clawstick's only hard dependency; listed here so `pip install -r` covers
+# the submodule when it is used via the sys.path shim instead of `pip -e`.
+pyyaml>=6
+
+# For --device cuda, also install the CUDA 12 runtime libraries. They are
+# separate from the NVIDIA driver and CTranslate2 cannot find them otherwise:
+#
+#     pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
+#
+# Left out of this file because they are ~1 GB and useless on a CPU-only box.

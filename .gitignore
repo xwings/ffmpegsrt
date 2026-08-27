@@ -1,0 +1,31 @@
+# Secrets — never commit real credentials
+.env
+.env.local
+*.key
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Clawstick runtime artifacts
+memory.md
+logs/
+session*.json
+
+# Media and generated output (test clips are large; keep the scripts)
+test/*.mp4
+test/*.mkv
+test/*.avi
+test/*.mov
+test/out/
+*.srt
+*.ass
+*.wav
