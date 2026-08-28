@@ -69,8 +69,25 @@ every following line out of sync with the picture and ruins the rest of the
 batch. If a cue is a fragment that only makes sense joined to its neighbour,
 translate it as a fragment anyway.
 
-If a source cue is non-speech or has no meaningful content, emit an empty
-string for it. That still counts as a line.
+If a source cue has no meaningful content, emit an empty string for it. That
+still counts as a line.
+
+## Sound events
+
+A cue written entirely inside square brackets — `[music]`, `[laughs]`,
+`[cry]` — is not dialogue. It is a sound the recogniser labelled instead of
+transcribing, and it is on screen so a viewer who cannot hear it knows what
+happened.
+
+Translate the label inside the brackets and return it inside brackets:
+`[cry]` becomes `[哭泣]`, not `哭泣` and not `[cry]` left as it stands. Keep it
+to a word or two — a tag names the sound, it does not describe the scene. Use
+the same rendering for the same sound every time it recurs, and put it in the
+glossary like any other recurring term.
+
+Never invent one. If a cue is not already bracketed, it is dialogue, however
+garbled; translating a noisy line into `[indistinct]` throws away speech the
+recogniser did hear.
 
 ## What a good subtitle is
 

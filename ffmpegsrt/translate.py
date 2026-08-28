@@ -1,6 +1,6 @@
-"""Subtitle translation driven by a clawstick multi-agent harness.
+"""Subtitle translation driven by a kerness multi-agent harness.
 
-Every batch of cues is run through a full clawstick ``Session``: a translator
+Every batch of cues is run through a full kerness ``Session``: a translator
 drafts, a reviewer attacks the draft, and an orchestrator issues the final
 line-for-line result. The gameplan lives in ``harness/subtitle_translate.md``.
 """
@@ -14,7 +14,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from ffmpegsrt._vendor import PROJECT_ROOT, ensure_clawstick
+from ffmpegsrt import sound
+from ffmpegsrt._vendor import PROJECT_ROOT, ensure_kerness
 from ffmpegsrt.config import LLMConfig
 from ffmpegsrt.errors import FfmpegSrtError
 from ffmpegsrt.langs import Language
@@ -72,7 +73,7 @@ class TranslationStats:
 class _QuietChannel:
     """Swallow agent chatter.
 
-    Clawstick defaults to a ConsoleChannel, which would interleave three
+    Kerness defaults to a ConsoleChannel, which would interleave three
     agents' full turns with the CLI's own progress output. ``-v`` swaps this
     for a real ConsoleChannel.
     """
@@ -85,7 +86,7 @@ class _QuietChannel:
 
 
 def _timed_provider(
-    clawstick,
+    kerness,
     llm: LLMConfig,
     timeout_sec: float,
     on_failure: Callable[[float, Exception], None],
@@ -93,7 +94,7 @@ def _timed_provider(
 ) -> object:
     """Build the provider, instrumented to report requests that don't land.
 
-    Clawstick retries internally and only logs a bare ``Provider error for
+    Kerness retries internally and only logs a bare ``Provider error for
     <turn>`` once every attempt is gone, which from the outside is
     indistinguishable from the process having hung. Timing each attempt here
     is what turns those minutes of silence into a line of output.
@@ -105,7 +106,7 @@ def _timed_provider(
     instead of grinding through its remaining turns at one timeout each.
     """
 
-    class TimedProvider(clawstick.CustomProvider):
+    class TimedProvider(kerness.CustomProvider):
         def chat(self, model, messages, tools=None):  # noqa: D102, ANN001
             due = deadline()
             if due is not None and time.monotonic() > due:
@@ -117,7 +118,7 @@ def _timed_provider(
                 on_failure(time.monotonic() - started, exc)
                 raise
             # A reasoning model that spends its whole output budget thinking
-            # answers with empty content. Clawstick treats that as a failed
+            # answers with empty content. Kerness treats that as a failed
             # attempt, so name it here rather than let it read as a stall.
             if not response.content.strip() and not response.tool_calls:
                 stop = response.stop_reason or "no stop reason"
@@ -140,8 +141,14 @@ def _timed_provider(
 
 
 def _numbered(cues: list[Cue]) -> str:
-    """Render a batch as the numbered list the gameplan expects."""
-    return "\n".join(f"{i}. {cue.text}" for i, cue in enumerate(cues, start=1))
+    """Render a batch as the numbered list the gameplan expects.
+
+    A sound cue is shown bracketed so the agents can tell an action tag from a
+    line of dialogue and translate the label rather than describing it.
+    """
+    return "\n".join(
+        f"{i}. {cue.display('source')}" for i, cue in enumerate(cues, start=1)
+    )
 
 
 def _build_topic(
@@ -167,7 +174,8 @@ def _build_topic(
             "Preceding cues, already translated, for context only — do NOT "
             "include these in your output:\n"
             + "\n".join(
-                f"  {cue.text}  ->  {cue.translated or ''}" for cue in context
+                f"  {cue.display('source')}  ->  {cue.display('translated')}"
+                for cue in context
             )
         )
 
@@ -185,7 +193,7 @@ def _coerce_lines(raw: object, expected: int) -> list[str] | None:
     """Normalise the harness's ``lines`` field into a list of strings.
 
     Returns ``None`` when the value cannot be trusted to line up with the
-    batch. Clawstick's result parser returns ``[]`` rather than raising on
+    batch. Kerness's result parser returns ``[]`` rather than raising on
     malformed JSON, so a wrong length is the signal that something went wrong
     upstream — it must not be papered over.
     """
@@ -212,7 +220,7 @@ def _coerce_lines(raw: object, expected: int) -> list[str] | None:
 
 
 class SubtitleTranslator:
-    """Runs the clawstick harness over batches of cues."""
+    """Runs the kerness harness over batches of cues."""
 
     def __init__(
         self,
@@ -226,10 +234,10 @@ class SubtitleTranslator:
         batch_budget_sec: float = BATCH_BUDGET_SEC,
         on_note: Callable[[str], None] | None = None,
     ) -> None:
-        ensure_clawstick()
-        import clawstick  # noqa: PLC0415 — only importable after the shim runs
+        ensure_kerness()
+        import kerness  # noqa: PLC0415 — only imported once the check passes
 
-        self._clawstick = clawstick
+        self._kerness = kerness
         self._llm = llm
         self._gameplan = str(gameplan)
         self._batch_size = max(1, batch_size)
@@ -242,7 +250,7 @@ class SubtitleTranslator:
         #: or None outside a session.
         self._deadline: float | None = None
         self._provider = _timed_provider(
-            clawstick, llm, timeout_sec, self._on_request_failure,
+            kerness, llm, timeout_sec, self._on_request_failure,
             lambda: self._deadline,
         )
 
@@ -290,8 +298,10 @@ class SubtitleTranslator:
             )
 
             for cue, line in zip(batch, lines):
-                cue.translated = line
-                if not line:
+                # Sound cues travel bracketed so the agents can see what they
+                # are; the wrapper comes off again because display() re-adds it.
+                cue.translated = sound.strip_brackets(line) if cue.sound else line
+                if not cue.translated:
                     stats.untranslated_cues += 1
             done += len(batch)
 
@@ -385,20 +395,20 @@ class SubtitleTranslator:
         expected: int,
         stats: TranslationStats,
     ) -> list[str] | None:
-        """Run one clawstick session; return its lines, or None if unusable.
+        """Run one kerness session; return its lines, or None if unusable.
 
         The session gets the batch budget as a deadline. It is cleared on the
         way out so the direct fallback, which is cheap and usually the thing
         that saves the batch, is not starved by the session that preceded it.
         """
-        clawstick = self._clawstick
-        session = clawstick.Session(
+        kerness = self._kerness
+        session = kerness.Session(
             gameplan=self._gameplan,
             topic=topic,
             provider=self._provider,
-            channel=clawstick.ConsoleChannel() if self._verbose else _QuietChannel(),
+            channel=kerness.ConsoleChannel() if self._verbose else _QuietChannel(),
             # No session file: each batch is a fresh run, and a stale one on
-            # disk would make clawstick resume the previous batch instead.
+            # disk would make kerness resume the previous batch instead.
             session_file=None,
             turn_delay_sec=0.0,
             max_turns=self._max_turns,

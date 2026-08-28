@@ -15,17 +15,13 @@ __pycache__/
 build/
 dist/
 
-# Clawstick runtime artifacts
+# Kerness runtime artifacts
 memory.md
 logs/
 session*.json
 
 # Media and generated output (test clips are large; keep the scripts)
-test/*.mp4
-test/*.mkv
-test/*.avi
-test/*.mov
-test/out/
+tmp/
 *.srt
 *.ass
 *.wav

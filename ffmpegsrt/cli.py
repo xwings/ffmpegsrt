@@ -9,7 +9,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from ffmpegsrt import __version__, langs, media, srt as srtlib, transcribe
+from ffmpegsrt import __version__, langs, media, sound, srt as srtlib, transcribe
 from ffmpegsrt import translate as translate_mod
 from ffmpegsrt.config import resolve_llm_config
 from ffmpegsrt.errors import FfmpegSrtError
@@ -68,6 +68,10 @@ def build_parser() -> argparse.ArgumentParser:
                       help="keep the source line above the translation")
     subs.add_argument("--srt-in", metavar="FILE",
                       help="use this existing SRT instead of transcribing")
+    subs.add_argument("--sound-tags", action="store_true",
+                      help="keep non-speech sounds the recogniser labelled "
+                           "(music, laughter, crying) as [tag] cues instead of "
+                           "dropping them")
 
     asr = parser.add_argument_group("speech recognition")
     asr.add_argument("--model", default="small", metavar="NAME",
@@ -249,7 +253,22 @@ def _get_cues(
         cues = srtlib.read_srt(args.srt_in)
         if not cues:
             raise media.MediaError(f"no cues found in {args.srt_in}")
-        _log(f"subtitles: reusing {args.srt_in} ({len(cues)} cues)")
+        if args.start or args.duration:
+            # The video was trimmed to a timeline starting at zero; these cues
+            # are still on the original one.
+            before = len(cues)
+            cues = srtlib.shift_and_clip(cues, args.start, args.duration)
+            if not cues:
+                raise media.MediaError(
+                    f"no cues from {args.srt_in} fall inside the requested "
+                    "--start/--duration window"
+                )
+            _log(f"subtitles: reusing {args.srt_in} ({len(cues)} of {before} "
+                 f"cues, shifted onto the clip's timeline)")
+        else:
+            _log(f"subtitles: reusing {args.srt_in} ({len(cues)} cues)")
+        if args.sound_tags:
+            _log(f"           {sound.classify(cues)} sound event(s) tagged")
         return cues
 
     audio = media.extract_audio(video, workdir / "audio.wav")
@@ -284,6 +303,10 @@ def _get_cues(
         detected = f", detected {result.language} " \
                    f"({result.language_probability:.0%} confident)"
     _log(f"asr      : {len(result.cues)} cues{detected}")
+    if args.sound_tags:
+        tagged = sound.classify(result.cues)
+        _log(f"           {tagged} sound event(s) tagged"
+             + ("" if tagged else " — VAD filters most non-speech; try --no-vad"))
     return result.cues
 
 
@@ -294,10 +317,10 @@ def _translate(
     target_lang: langs.Language,
     llm_config,
 ) -> None:
-    """Run the clawstick harness over the cues and report what happened."""
+    """Run the kerness harness over the cues and report what happened."""
     batches = (len(cues) + args.batch_size - 1) // args.batch_size
     _log(f"translate: {len(cues)} cues -> {target_lang.name} "
-         f"via clawstick ({batches} batches of {args.batch_size}, "
+         f"via kerness ({batches} batches of {args.batch_size}, "
          f"model {llm_config.model})")
 
     translator = translate_mod.SubtitleTranslator(

@@ -1,3 +1,3 @@
-[submodule "vendor/clawstick"]
-	path = vendor/clawstick
-	url = https://github.com/xwings/clawstick
+[submodule "vendor/kerness"]
+	path = vendor/kerness
+	url = git@github.com:xwings/kerness.git

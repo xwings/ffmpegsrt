@@ -8,7 +8,7 @@ python3 ffmpegsrt.py -i movie.mp4 -l jp -t zh_cn -s movie.srt -b -o movie_out.mp
 ```
 
 Speech recognition runs locally with [faster-whisper](https://github.com/SYSTRAN/faster-whisper).
-Translation runs through a [clawstick](https://github.com/xwings/clawstick) multi-agent
+Translation runs through a [kerness](https://github.com/xwings/kerness) multi-agent
 harness — a translator drafts each batch, a reviewer attacks the draft for accuracy and
 readability, and an editor issues the final line-for-line result. ffmpeg does the
 demuxing and the burn-in.
@@ -23,10 +23,14 @@ cd ffmpegsrt
 
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-pip install -e vendor/clawstick
+pip install ./vendor/kerness/bindings/python
 ```
 
 Already cloned without `--recursive`? `git submodule update --init --recursive`.
+
+Kerness is Rust, so that last line compiles an extension module and needs a Rust
+toolchain (rustc 1.88+) from [rustup.rs](https://rustup.rs). It is only needed for
+translation — transcribing and burning in an existing SRT do not import it.
 
 You also need `ffmpeg` and `ffprobe` on your PATH:
 
@@ -90,6 +94,7 @@ ffmpegsrt.py -i FILE [-l LANG] [-t LANG] [-s FILE] [-b] [-o FILE]
 | `-s, --srt` | Write subtitles to this `.srt` |
 | `-b, --burn` | Burn subtitles into the video (works without `-s`) |
 | `-o, --output` | Output video for `-b` (default `<input>_out.mp4`) |
+| `--sound-tags` | Keep non-speech sounds as `[cry]`-style action tags |
 
 At least one of `-s` or `-b` is required — otherwise there is nothing to produce.
 
@@ -107,6 +112,9 @@ python3 ffmpegsrt.py -i movie.mp4 -l jp -t zh_cn -b -o movie_out.mp4
 
 # Source line above the translation
 python3 ffmpegsrt.py -i movie.mp4 -l jp -t zh_cn --bilingual -s movie.srt
+
+# Keep sound effects as action tags: [cry] becomes [哭泣]
+python3 ffmpegsrt.py -i movie.mp4 -l jp -t zh_cn --sound-tags --no-vad -s movie.srt
 
 # Re-burn an SRT you already have — skips speech recognition entirely
 python3 ffmpegsrt.py -i movie.mp4 --srt-in movie.srt -b -o movie_out.mp4
@@ -139,6 +147,14 @@ Translating a feature film is a long job even when the endpoint is healthy — p
 `-s out.srt` and the transcript is written before translation starts, so an interrupted
 run can be resumed with `--srt-in out.srt` without transcribing again.
 
+**Sound events** — `--sound-tags` keeps non-speech that the recogniser labelled and
+renders it as an action tag on its own cue: `[cry]`, `[laughs]`, `[music]`. The tag is
+translated like anything else, so a Chinese track gets `[哭泣]`. Off by default, and
+nothing is ever invented — a cue becomes a tag only when Whisper already wrote one
+down. Most of the time it doesn't: voice-activity filtering drops non-speech before
+decoding, so pair the flag with `--no-vad` if you actually want the sounds, and accept
+that Whisper hallucinates more over music without the filter.
+
 **Encoding** — `--start` / `--duration` to process a slice, `--font`, `--font-size`,
 `--crf`, `--preset`, `--keep-temp`.
 
@@ -151,7 +167,7 @@ input.mp4
    │                              │
    │                        faster-whisper ──► timed cues in the source language
    │                                                │
-   │                        clawstick session per batch of 40 cues:
+   │                        kerness session per batch of 40 cues:
    │                          Translator drafts → Reviewer objects → Editor finalises
    │                                                │
    │                                          translated cues
@@ -170,7 +186,7 @@ needed.
 A few things worth knowing:
 
 - **Cue counts are checked.** The harness must return exactly one line per source cue.
-  Clawstick returns type defaults rather than raising on a malformed result block, so a
+  Kerness returns type defaults rather than raising on a malformed result block, so a
   short list would silently desync every following subtitle. A wrong count triggers a
   retry, then a direct single-call fallback, and only then gives up on that batch —
   keeping its source text so the run still finishes.
@@ -178,7 +194,9 @@ A few things worth knowing:
   are handed to the next, along with the last three cues, so characters do not get
   renamed halfway through the film.
 - **Slices are cut once, up front.** `--start`/`--duration` materialise a clip before
-  transcription, so cue timings and the burn-in always share one timeline.
+  transcription, so cue timings and the burn-in always share one timeline. Cues coming
+  from `--srt-in` are shifted onto that clip's timeline and clipped to it, so re-burning
+  a slice of an SRT you already have stays in sync.
 - **Whisper's context carry-over is disabled.** It is the usual cause of a line
   repeating for minutes on a long feature.
 
@@ -203,5 +221,5 @@ Test media is gitignored — bring your own file.
 
 MIT. See [LICENSE](LICENSE).
 
-Clawstick is vendored as a submodule and is also MIT licensed. faster-whisper (MIT) and
+Kerness is vendored as a submodule and is also MIT licensed. faster-whisper (MIT) and
 ffmpeg (LGPL/GPL depending on build) are separate dependencies under their own terms.

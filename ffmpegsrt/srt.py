@@ -19,22 +19,34 @@ class Cue:
     ``text`` is always the transcribed source line.  ``translated`` is filled
     in later by the translation pass and stays ``None`` when ``-t`` was not
     requested, which is how :func:`write_srt` tells the two modes apart.
+
+    When ``sound`` is set the cue is a non-speech event rather than dialogue.
+    Both bodies then hold a bare label — ``cry``, not ``[cry]`` — and
+    :meth:`display` brackets them, so every output mode marks a sound the same
+    way.  See :mod:`ffmpegsrt.sound`.
     """
 
     start: float
     end: float
     text: str
     translated: str | None = None
+    sound: bool = False
+
+    def _wrap(self, body: str) -> str:
+        """Bracket a sound label; leave dialogue untouched."""
+        return f"[{body}]" if self.sound and body else body
 
     def display(self, mode: str) -> str:
         """Return the body this cue contributes in the given output mode."""
+        source = self._wrap(self.text)
         if mode == "source" or self.translated is None:
-            return self.text
+            return source
+        translated = self._wrap(self.translated)
         if mode == "bilingual":
             # Source on top, translation under it — the order subtitle readers
             # expect when the translation is the one they are actually reading.
-            return f"{self.text}\n{self.translated}" if self.text else self.translated
-        return self.translated
+            return f"{source}\n{translated}" if self.text else translated
+        return translated
 
 
 def format_timestamp(seconds: float) -> str:
@@ -56,6 +68,53 @@ def parse_timestamp(hours: str, minutes: str, secs: str, millis: str) -> float:
         + int(secs)
         + int(millis.ljust(3, "0")) / 1000
     )
+
+
+def shift_and_clip(
+    cues: list[Cue],
+    start: float | None = None,
+    duration: float | None = None,
+) -> list[Cue]:
+    """Move *cues* onto a clip's timeline and drop what falls outside it.
+
+    ``--start``/``--duration`` cut a working clip whose timeline begins at
+    zero.  Cues that came from an existing SRT are still on the original
+    timeline, so without this every one of them would sit ``start`` seconds
+    late against the trimmed picture.
+
+    Cues straddling an edge are kept and clamped: half a line on screen beats
+    a line missing from the cut.
+
+    Args:
+        cues: Cues on the original timeline.
+        start: Offset the clip was cut from, in seconds.
+        duration: Length of the clip, in seconds.
+
+    Returns:
+        New cues on the clip's timeline, in order.
+    """
+    offset = start or 0.0
+    kept: list[Cue] = []
+
+    for cue in cues:
+        begin = cue.start - offset
+        finish = cue.end - offset
+        if finish <= 0:
+            continue
+        if duration is not None and begin >= duration:
+            continue
+        if duration is not None:
+            finish = min(finish, duration)
+        kept.append(
+            Cue(
+                start=max(0.0, begin),
+                end=finish,
+                text=cue.text,
+                translated=cue.translated,
+                sound=cue.sound,
+            )
+        )
+    return kept
 
 
 def write_srt(cues: list[Cue], path: str | Path, mode: str = "translated") -> Path:

@@ -11,6 +11,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from ffmpegsrt._vendor import PROJECT_ROOT
 from ffmpegsrt.errors import FfmpegSrtError
 
 ENV_API_BASE = "FFMPEGSRT_API_BASE"
@@ -37,23 +38,32 @@ def redact(secret: str | None) -> str:
 def load_dotenv(start: Path | None = None) -> dict[str, str]:
     """Read ``KEY=value`` pairs out of a ``.env`` beside the project.
 
+    Looks in *start* (the working directory by default) and then in the
+    checkout root, because ``.env`` is written once next to ``.env.example``
+    but the tool is usually run from wherever the movie lives.
+
     Deliberately minimal — no interpolation, no export keyword, no multi-line
     values — so the tool keeps its dependency list to Whisper and PyYAML.
     """
     values: dict[str, str] = {}
-    root = Path(start) if start else Path.cwd()
-    for name in _DOTENV_NAMES:
-        path = root / name
-        if not path.is_file():
-            continue
-        for line in path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
+    roots = [Path(start) if start else Path.cwd()]
+    if PROJECT_ROOT not in roots:
+        roots.append(PROJECT_ROOT)
+
+    for root in roots:
+        for name in _DOTENV_NAMES:
+            path = root / name
+            if not path.is_file():
                 continue
-            key, _, value = line.partition("=")
-            value = value.strip().strip("'\"")
-            # Nearest file wins; do not let .env overwrite .env.local.
-            values.setdefault(key.strip(), value)
+            for line in path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                value = value.strip().strip("'\"")
+                # Nearest file wins; do not let .env overwrite .env.local,
+                # nor the checkout's .env overwrite the working directory's.
+                values.setdefault(key.strip(), value)
     return values
 
 

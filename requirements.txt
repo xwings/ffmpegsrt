@@ -1,9 +1,15 @@
 # Speech recognition (CTranslate2 backend — no torch required)
 faster-whisper>=1.2
 
-# Clawstick's only hard dependency; listed here so `pip install -r` covers
-# the submodule when it is used via the sys.path shim instead of `pip -e`.
-pyyaml>=6
+# Translation runs through kerness, which is a Rust extension and so has to be
+# built rather than merely put on sys.path. It is not a PyPI dependency — it
+# ships as the submodule at vendor/kerness — so install it separately, with a
+# Rust toolchain (rustc 1.88+, https://rustup.rs) present:
+#
+#     git submodule update --init --recursive
+#     pip install ./vendor/kerness/bindings/python
+#
+# Transcription alone needs none of this.
 
 # For --device cuda, also install the CUDA 12 runtime libraries. They are
 # separate from the NVIDIA driver and CTranslate2 cannot find them otherwise:

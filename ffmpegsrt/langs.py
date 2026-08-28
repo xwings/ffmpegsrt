@@ -30,9 +30,12 @@ _ALIASES: dict[str, Language] = {}
 
 
 def _register(code: str, name: str, *aliases: str) -> None:
+    # First registration of a key wins. Two entries share the code "zh", and
+    # without this the later one would claim the bare alias — making `-t zh`
+    # mean Traditional Chinese, which is not what anyone typing "zh" expects.
     lang = Language(code=code, name=name)
     for key in (code, name.lower(), *aliases):
-        _ALIASES[key.lower().replace("-", "_")] = lang
+        _ALIASES.setdefault(key.lower().replace("-", "_"), lang)
 
 
 # Chinese needs two distinct entries: Whisper transcribes both as "zh", but a
