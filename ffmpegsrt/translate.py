@@ -418,7 +418,9 @@ class SubtitleTranslator:
             ),
         )
 
-        session.add_participant(
+        # An agent with no role is a participant; the editor conducts, and
+        # only the built-in "orchestrator" role seats it in that chair.
+        session.add_agent(
             name="Translator",
             model=self._llm.model,
             persona=(
@@ -426,7 +428,7 @@ class SubtitleTranslator:
                 "register. Writes tight, natural lines that read at a glance."
             ),
         )
-        session.add_participant(
+        session.add_agent(
             name="Reviewer",
             model=self._llm.model,
             persona=(
@@ -435,9 +437,10 @@ class SubtitleTranslator:
                 f"length. Objects with cue numbers, not general impressions."
             ),
         )
-        session.add_orchestrator(
+        session.add_agent(
             name="Editor",
             model=self._llm.model,
+            role="orchestrator",
             persona=(
                 "The editor who ships the file. Settles disputes quickly and "
                 "guarantees one output line per source cue."
