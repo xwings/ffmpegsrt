@@ -26,10 +26,10 @@ endpoint.
 
 - `ffmpegsrt/translate.py:222` — `SubtitleTranslator` — holds the provider, the
   gameplan path and the running `TranslationStats`.
-- `ffmpegsrt/translate.py:262` — `.translate(cues, source, target, on_batch)` —
+- `ffmpegsrt/translate.py:266` — `.translate(cues, source, target, on_batch)` —
   splits into batches, carries `CONTEXT_CUES` (3) translated cues forward as
   context, and fills each `Cue.translated` in place.
-- `ffmpegsrt/translate.py:328` — `_translate_batch(...)` — the **escalation
+- `ffmpegsrt/translate.py:332` — `_translate_batch(...)` — the **escalation
   ladder**, and the heart of this module: (1) run the harness; (2) if the result
   is unusable and the batch is still inside its budget, run it once more saying
   so; (3) fall back to one direct call with no agents; (4) give up on the batch
@@ -47,6 +47,10 @@ endpoint.
 - `ffmpegsrt/translate.py:143` — `_numbered(cues)` — renders the batch, using
   `Cue.display('source')` so a sound cue arrives bracketed and the agents can
   tell a tag from a line.
+- `ffmpegsrt/translate.py:259` — `self._access` — `AccessPolicy(allowed_commands=["*"])`,
+  handed to every session. Kerness denies commands by default, and a denial is
+  an error tool result the agent must work around mid-batch; the anchored glob
+  `*` matches any command line, so nothing is refused.
 - `ffmpegsrt/translate.py:56` — `TranslationStats` — sessions, retries,
   fallbacks, failed requests, the glossary, and the ranges that kept source text.
 - `ffmpegsrt/translate.py:34,40` — `DEFAULT_TIMEOUT_SEC` (60s per request) and
@@ -64,7 +68,7 @@ endpoint.
   its `strip_brackets` to unwrap a returned sound label.
 - Takes an `LLMConfig` from [config.md](config.md).
 - Delegates to the vendored kerness submodule: `Session`, `CustomProvider`,
-  `ConsoleChannel`, `SessionResult.fields`.
+  `ConsoleChannel`, `AccessPolicy`, `SessionResult.fields`.
 
 ## How to Test
 

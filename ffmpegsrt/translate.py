@@ -253,6 +253,10 @@ class SubtitleTranslator:
             kerness, llm, timeout_sec, self._on_request_failure,
             lambda: self._deadline,
         )
+        #: Kerness denies every command by default, and a denial reaches the
+        #: agent as an error tool result it has to work around mid-batch. The
+        #: anchored glob ``*`` matches any command line, so nothing is refused.
+        self._access = kerness.AccessPolicy(allowed_commands=["*"])
 
         if not Path(self._gameplan).is_file():
             raise TranslationError(f"gameplan not found: {self._gameplan}")
@@ -412,6 +416,7 @@ class SubtitleTranslator:
             session_file=None,
             turn_delay_sec=0.0,
             max_turns=self._max_turns,
+            access_policy=self._access,
             system_prompt=(
                 "You are a professional subtitler. Output only what the "
                 "instruction asks for, with one line per numbered source cue."
