@@ -26,10 +26,10 @@ srt="$out/sample.srt"
 video="$out/sample_out.mp4"
 rm -f "$srt" "$video"
 
-echo "== running the pipeline (${src_lang} -> ${dst_lang}, with sound tags) =="
+echo "== running the pipeline (${src_lang} -> ${dst_lang}) =="
 python3 "$root/ffmpegsrt.py" \
     -i "$sample" -l "$src_lang" -t "$dst_lang" \
-    --sound-tags -s "$srt" -b -o "$video" \
+    -s "$srt" -b -o "$video" \
     || fail "pipeline exited non-zero"
 
 echo "== checking the SRT =="

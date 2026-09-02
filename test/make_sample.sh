@@ -37,7 +37,7 @@ echo "cutting ${seconds}s from ${start}s of $(basename "$src") -> $(basename "$d
 # which drifts the start by up to a GOP and desyncs the timings the test checks.
 ffmpeg -y -v error -stats \
     -ss "$start" -i "$src" -t "$seconds" \
-    -c:v libx264 -preset veryfast -crf 18 -pix_fmt yuv420p \
+    -c:v libx265 -preset veryfast -crf 18 -pix_fmt yuv420p10le -tag:v hvc1 \
     -c:a aac \
     "$dest"
 

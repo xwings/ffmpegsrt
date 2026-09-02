@@ -10,8 +10,8 @@ milestone of its own but every one of them ships through it.
 
 ## Status
 
-`done` — every documented flag is wired and exercised. `--sound-tags` (`M4`)
-and the `--srt-in` timeline rebase both land here.
+`done` — every documented flag is wired and exercised. Automatic sound-label
+classification (`M4`) and the `--srt-in` timeline rebase both land here.
 
 ## Code Structure
 
@@ -26,20 +26,20 @@ and the `--srt-in` timeline rebase both land here.
   why the import is not at the top of the file.
 - `ffmpegsrt/cli.py:37` — `build_parser()` — every flag, grouped into subtitle,
   speech-recognition, translation-endpoint, encoding and misc sections.
-- `ffmpegsrt/cli.py:149` — `_validate(args, parser)` — rejects combinations that
+- `ffmpegsrt/cli.py:145` — `_validate(args, parser)` — rejects combinations that
   cannot produce output: no `-s` and no `-b`, or `--bilingual` without `-t`.
-- `ffmpegsrt/cli.py:162` — `run(args, parser)` — the pipeline. Resolves
+- `ffmpegsrt/cli.py:158` — `run(args, parser)` — the pipeline. Resolves
   credentials *before* transcription and checkpoints the transcript *before*
   translation; both orderings are load-bearing, not incidental.
-- `ffmpegsrt/cli.py:245` — `_get_cues(...)` — either reads `--srt-in` (shifting
+- `ffmpegsrt/cli.py:241` — `_get_cues(...)` — either reads `--srt-in` (shifting
   it onto the clip's timeline when a slice was requested) or extracts audio and
-  transcribes. Applies `sound.classify` on both paths when `--sound-tags` is on.
-- `ffmpegsrt/cli.py:313` — `_translate(...)` — builds the `SubtitleTranslator`
+  transcribes. Applies `sound.classify` automatically on both paths.
+- `ffmpegsrt/cli.py:307` — `_translate(...)` — builds the `SubtitleTranslator`
   and reports what the endpoint did: failed requests, retries, fallbacks, and
   any range that kept its source text.
-- `ffmpegsrt/cli.py:144` — `_log(message)` — progress goes to **stderr**, so
+- `ffmpegsrt/cli.py:140` — `_log(message)` — progress goes to **stderr**, so
   stdout stays clean for piping.
-- `ffmpegsrt/cli.py:356` — `main(argv)` — catches `FfmpegSrtError` and
+- `ffmpegsrt/cli.py:350` — `main(argv)` — catches `FfmpegSrtError` and
   `ValueError`; returns `130` on Ctrl-C.
 
 ## Interactions
@@ -71,7 +71,7 @@ python3 ffmpegsrt.py --version       # pass = "ffmpegsrt 0.1.0"
   ffmpeg -y -v error -f lavfi -i testsrc=d=12:s=320x240 \
       -f lavfi -i sine=d=12 -shortest /tmp/s.mp4
   printf '1\n00:00:04,000 --> 00:00:06,000\nhello\n\n2\n00:00:07,000 --> 00:00:08,500\n(crying)\n' > /tmp/in.srt
-  python3 ffmpegsrt.py -i /tmp/s.mp4 --srt-in /tmp/in.srt --sound-tags \
+  python3 ffmpegsrt.py -i /tmp/s.mp4 --srt-in /tmp/in.srt \
       --start 4 --duration 5 -s /tmp/out.srt
   ```
 

@@ -158,6 +158,9 @@ def trim(
     The clip is re-encoded rather than stream-copied: ``-c copy`` can only cut
     on a keyframe, which would drift the cut point by up to a GOP and desync
     the very timings this function exists to keep straight.
+
+    Like the burn-in, the clip is 10-bit HEVC, so a re-encode of a re-encode
+    does not compound 8-bit quantisation error.
     """
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -169,10 +172,11 @@ def trim(
     if duration:
         cmd += ["-t", f"{duration:.3f}"]
     cmd += [
-        "-c:v", "libx264",
+        "-c:v", "libx265",
         "-preset", preset,
         "-crf", str(crf),
-        "-pix_fmt", "yuv420p",
+        "-pix_fmt", "yuv420p10le",
+        "-tag:v", "hvc1",
         "-c:a", "aac",
         str(dest),
     ]
@@ -238,6 +242,11 @@ def burn_in(
 
     The video is necessarily re-encoded — burning in means rewriting pixels —
     but the audio is stream-copied, so nothing is lost there.
+
+    Encoding is 10-bit HEVC: the extra two bits cost almost nothing at these
+    bitrates and keep the anti-aliased subtitle edges from banding against a
+    dark background.  ``-tag:v hvc1`` is what makes the mp4 playable in
+    QuickTime and on Apple hardware; ffmpeg's default ``hev1`` tag is not.
     """
     dest = Path(dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -252,10 +261,11 @@ def burn_in(
         "ffmpeg", "-y", "-v", "error", "-stats",
         "-i", str(video),
         "-vf", vf,
-        "-c:v", "libx264",
+        "-c:v", "libx265",
         "-preset", preset,
         "-crf", str(crf),
-        "-pix_fmt", "yuv420p",
+        "-pix_fmt", "yuv420p10le",
+        "-tag:v", "hvc1",
         "-c:a", "copy",
         "-movflags", "+faststart",
         str(dest),

@@ -68,10 +68,6 @@ def build_parser() -> argparse.ArgumentParser:
                       help="keep the source line above the translation")
     subs.add_argument("--srt-in", metavar="FILE",
                       help="use this existing SRT instead of transcribing")
-    subs.add_argument("--sound-tags", action="store_true",
-                      help="keep non-speech sounds the recogniser labelled "
-                           "(music, laughter, crying) as [tag] cues instead of "
-                           "dropping them")
 
     asr = parser.add_argument_group("speech recognition")
     asr.add_argument("--model", default="small", metavar="NAME",
@@ -121,9 +117,9 @@ def build_parser() -> argparse.ArgumentParser:
     enc.add_argument("--font-size", type=int, default=20, metavar="N",
                      help="subtitle font size (default: 20)")
     enc.add_argument("--crf", type=int, default=20, metavar="N",
-                     help="x264 quality, lower is better (default: 20)")
+                     help="x265 quality, lower is better (default: 20)")
     enc.add_argument("--preset", default="medium", metavar="NAME",
-                     help="x264 speed preset (default: medium)")
+                     help="x265 speed preset (default: medium)")
 
     misc = parser.add_argument_group("misc")
     misc.add_argument("--keep-temp", action="store_true",
@@ -224,7 +220,7 @@ def run(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         if args.burn:
             out_path = Path(args.output) if args.output else _default_output(input_path)
             _log(f"burn-in  : encoding {out_path} "
-                 f"(x264 crf {args.crf}, preset {args.preset})")
+                 f"(x265 10-bit crf {args.crf}, preset {args.preset})")
             media.burn_in(
                 working_video, srt_path, out_path,
                 font=args.font, font_size=args.font_size,
@@ -267,8 +263,7 @@ def _get_cues(
                  f"cues, shifted onto the clip's timeline)")
         else:
             _log(f"subtitles: reusing {args.srt_in} ({len(cues)} cues)")
-        if args.sound_tags:
-            _log(f"           {sound.classify(cues)} sound event(s) tagged")
+        _log(f"           {sound.classify(cues)} sound event(s) tagged")
         return cues
 
     audio = media.extract_audio(video, workdir / "audio.wav")
@@ -303,10 +298,9 @@ def _get_cues(
         detected = f", detected {result.language} " \
                    f"({result.language_probability:.0%} confident)"
     _log(f"asr      : {len(result.cues)} cues{detected}")
-    if args.sound_tags:
-        tagged = sound.classify(result.cues)
-        _log(f"           {tagged} sound event(s) tagged"
-             + ("" if tagged else " — VAD filters most non-speech; try --no-vad"))
+    tagged = sound.classify(result.cues)
+    _log(f"           {tagged} sound event(s) tagged"
+         + ("" if tagged else " — VAD filters most non-speech; try --no-vad"))
     return result.cues
 
 

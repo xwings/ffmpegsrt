@@ -53,8 +53,9 @@ and loader failures are translated into something actionable.
 - Called by [cli.md](cli.md), which passes a throttled progress callback because
   faster-whisper yields segments lazily.
 - Consumes audio produced by [media.md](media.md).
-- Produces `Cue` objects owned by [subtitles.md](subtitles.md); when
-  `--sound-tags` is on, its output is then passed through `sound.classify`.
+- Produces `Cue` objects owned by [subtitles.md](subtitles.md); its output is
+  always passed through `sound.classify` so recogniser-labelled sounds are
+  distinct from dialogue before translation.
 - Raises `TranscriptionError`, a subclass of the base in [config.md](config.md).
 
 ## How to Test

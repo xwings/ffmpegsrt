@@ -9,7 +9,7 @@ a real endpoint. Serves `M5`.
 
 ## Status
 
-`in progress (M5)` — 45 unit tests pass. The end-to-end pair is written but
+`in progress (M5)` — 48 unit tests pass. The end-to-end pair is written but
 cannot run unattended: it needs a movie the user supplies (test media is
 gitignored) and working translation credentials.
 
@@ -25,7 +25,7 @@ gitignored) and working translation credentials.
 
 - `test/test_units.py:19` — the `sys.path` insert that makes the suite runnable
   as a bare script, matching how `ffmpegsrt.py` bootstraps itself.
-- `test/test_units.py:220` — `TestConfig.setUp` — clears `os.environ` and patches
+- `test/test_units.py:300` — `TestConfig.setUp` — clears `os.environ` and patches
   `config.PROJECT_ROOT` to an empty directory. Without it the checkout's real
   `.env` satisfies the test asserting that credentials are missing; the suite
   passed for the wrong reason once already.
@@ -35,9 +35,11 @@ gitignored) and working translation credentials.
   window, clamped when they straddle an edge.
 - `TestSoundDetection` — the marker set, and that a tagged cue survives an SRT
   round trip so `--srt-in` restores it.
+- `TestParser` and `TestGetCues` — the removed sound-tag switch and automatic
+  sound classification on both existing-SRT and Whisper-transcription paths.
 - `TestLanguages.test_bare_zh_is_simplified` — regression for the alias
   collision described in [config.md](config.md).
-- `test/make_sample.sh:33` — defaults the cut to a third of the way in: opening
+- `test/make_sample.sh:25` — defaults the cut to a third of the way in: opening
   credits are usually silent, and a sample with no dialogue tests nothing.
 - `test/run_test.sh` — asserts the SRT parses, timings are monotonic and inside
   the sample, the text is in the target script (a still-ASCII "translation"

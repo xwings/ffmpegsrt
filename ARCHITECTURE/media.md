@@ -41,7 +41,9 @@ something rather than trusting ffmpeg's exit code alone.
   fill, dark outline, light shadow, so the text stays readable over both bright
   and dark footage.
 - `ffmpegsrt/media.py:226` — `burn_in(video, subtitles, dest, ...)` — re-encodes
-  video (burning in means rewriting pixels) but stream-copies audio.
+  video (burning in means rewriting pixels) but stream-copies audio. Output is
+  10-bit HEVC, tagged `hvc1` so QuickTime and Apple hardware will play it;
+  ffmpeg's default `hev1` tag they refuse.
 - `ffmpegsrt/media.py:15` — `DEFAULT_FONT = "Droid Sans Fallback"` — covers CJK,
   which libass's usual DejaVu default does not; Chinese would render as tofu.
 
@@ -81,6 +83,7 @@ python3 test/test_units.py    # pass = exit 0, "OK"
 - `probe` always takes the **first** audio stream. A film with a commentary
   track first, or a dub before the original, transcribes the wrong one; there is
   no flag to choose.
-- Burn-in hardcodes libx264 and yuv420p. No HEVC, no hardware encoder, no way to
-  pass through arbitrary ffmpeg flags.
+- Trim and burn-in hardcode libx265 and yuv420p10le. No hardware encoder, no way
+  to pass through arbitrary ffmpeg flags, and no way to ask for 8-bit or another
+  codec if a target player cannot decode HEVC.
 - `subprocess.run` has no timeout, so a wedged ffmpeg hangs the run.

@@ -94,7 +94,6 @@ ffmpegsrt.py -i FILE [-l LANG] [-t LANG] [-s FILE] [-b] [-o FILE]
 | `-s, --srt` | Write subtitles to this `.srt` |
 | `-b, --burn` | Burn subtitles into the video (works without `-s`) |
 | `-o, --output` | Output video for `-b` (default `<input>_out.mp4`) |
-| `--sound-tags` | Keep non-speech sounds as `[cry]`-style action tags |
 
 At least one of `-s` or `-b` is required — otherwise there is nothing to produce.
 
@@ -113,8 +112,8 @@ python3 ffmpegsrt.py -i movie.mp4 -l jp -t zh_cn -b -o movie_out.mp4
 # Source line above the translation
 python3 ffmpegsrt.py -i movie.mp4 -l jp -t zh_cn --bilingual -s movie.srt
 
-# Keep sound effects as action tags: [cry] becomes [哭泣]
-python3 ffmpegsrt.py -i movie.mp4 -l jp -t zh_cn --sound-tags --no-vad -s movie.srt
+# Sound labels become action tags automatically: (coughs) becomes [咳嗽]
+python3 ffmpegsrt.py -i movie.mp4 -l jp -t zh_cn -s movie.srt
 
 # Re-burn an SRT you already have — skips speech recognition entirely
 python3 ffmpegsrt.py -i movie.mp4 --srt-in movie.srt -b -o movie_out.mp4
@@ -147,16 +146,17 @@ Translating a feature film is a long job even when the endpoint is healthy — p
 `-s out.srt` and the transcript is written before translation starts, so an interrupted
 run can be resumed with `--srt-in out.srt` without transcribing again.
 
-**Sound events** — `--sound-tags` keeps non-speech that the recogniser labelled and
-renders it as an action tag on its own cue: `[cry]`, `[laughs]`, `[music]`. The tag is
-translated like anything else, so a Chinese track gets `[哭泣]`. Off by default, and
-nothing is ever invented — a cue becomes a tag only when Whisper already wrote one
-down. Most of the time it doesn't: voice-activity filtering drops non-speech before
-decoding, so pair the flag with `--no-vad` if you actually want the sounds, and accept
-that Whisper hallucinates more over music without the filter.
+**Sound events** — non-speech that Whisper or an input SRT labels as a whole cue is
+automatically rendered as an action tag: `[breathing]`, `[coughs]`, `[music]`. The tag
+is translated by the configured LLM like any other cue, so a Chinese track can get
+`[咳嗽]`. Nothing is invented — bare text remains dialogue, even if it mentions a
+sound. Voice-activity filtering can remove non-speech before Whisper decodes it; use
+`--no-vad` to expose more of the audio when needed, accepting that Whisper may then
+hallucinate dialogue over music or room tone.
 
-**Encoding** — `--start` / `--duration` to process a slice, `--font`, `--font-size`,
-`--crf`, `--preset`, `--keep-temp`.
+**Encoding** — burn-in writes 10-bit HEVC (`libx265`, `yuv420p10le`, tagged `hvc1`
+so Apple players accept it). `--start` / `--duration` to process a slice, `--font`,
+`--font-size`, `--crf`, `--preset`, `--keep-temp`.
 
 ## How it works
 

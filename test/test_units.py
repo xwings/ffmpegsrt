@@ -18,7 +18,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from ffmpegsrt import config, langs, media, sound, srt, translate  # noqa: E402
+from ffmpegsrt import cli, config, langs, media, sound, srt, translate  # noqa: E402
 from ffmpegsrt.srt import Cue  # noqa: E402
 
 
@@ -150,6 +150,8 @@ class TestSoundDetection(unittest.TestCase):
         cases = {
             "[Music]": "Music",
             "(laughs)": "laughs",
+            "[breathing]": "breathing",
+            "(coughs)": "coughs",
             "*sobbing*": "sobbing",
             "（笑）": "笑",
             "【音楽】": "音楽",
@@ -163,7 +165,15 @@ class TestSoundDetection(unittest.TestCase):
         self.assertEqual(sound.detect("♪ la la ♪"), "la la")
 
     def test_dialogue_is_not_a_sound(self):
-        for text in ("Hello there", "[Music] I cannot wait", "", "[]", "(He said)hi"):
+        for text in (
+            "Hello there",
+            "I can hear her breathing",
+            "[coughs] Are you okay?",
+            "[Music] I cannot wait",
+            "",
+            "[]",
+            "(He said)hi",
+        ):
             self.assertIsNone(sound.detect(text), text)
 
     def test_classify_marks_and_counts(self):
@@ -187,9 +197,79 @@ class TestSoundDetection(unittest.TestCase):
             path = srt.write_srt(cues, Path(tmp) / "o.srt", mode="source")
             reparsed = srt.read_srt(path)
         self.assertEqual(reparsed[0].text, "[Music]")
-        # Re-classifying restores the flag, which is what --srt-in relies on.
+        # Re-classifying restores the flag on the automatic --srt-in path.
         self.assertEqual(sound.classify(reparsed), 1)
         self.assertTrue(reparsed[0].sound)
+
+
+class TestParser(unittest.TestCase):
+    def test_sound_tags_option_is_removed(self):
+        parser = cli.build_parser()
+        help_text = parser.format_help()
+        self.assertNotIn("--sound-tags", help_text)
+        self.assertIn("--no-vad", help_text)
+
+        with mock.patch("sys.stderr"), self.assertRaises(SystemExit) as caught:
+            parser.parse_args(["-i", "movie.mp4", "--sound-tags"])
+        self.assertEqual(caught.exception.code, 2)
+
+
+class TestGetCues(unittest.TestCase):
+    def test_existing_srt_classifies_sound_markers_automatically(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = srt.write_srt(
+                [
+                    Cue(0, 1, "[breathing]"),
+                    Cue(1, 2, "Are you okay?"),
+                    Cue(2, 3, "(coughs)"),
+                ],
+                root / "input.srt",
+                mode="source",
+            )
+            args = cli.build_parser().parse_args(
+                [
+                    "-i", "movie.mp4", "--srt-in", str(path),
+                    "-s", str(root / "out.srt"),
+                ]
+            )
+            with mock.patch.object(cli, "_log"):
+                cues = cli._get_cues(args, Path("unused.mp4"), root, None)
+
+        self.assertEqual([cue.sound for cue in cues], [True, False, True])
+        self.assertEqual([cue.text for cue in cues],
+                         ["breathing", "Are you okay?", "coughs"])
+
+    def test_transcription_classifies_sound_markers_automatically(self):
+        args = cli.build_parser().parse_args(
+            ["-i", "movie.mp4", "-s", "out.srt"]
+        )
+        result = cli.transcribe.Transcript(
+            cues=[
+                Cue(0, 1, "(coughs)"),
+                Cue(1, 2, "I am coughing"),
+                Cue(2, 3, "[breathing]"),
+            ],
+            language="en",
+            language_probability=0.99,
+            duration=3.0,
+        )
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.object(
+                cli.media, "extract_audio", return_value=Path("audio.wav")
+            ),
+            mock.patch.object(
+                cli.transcribe, "transcribe", return_value=result
+            ) as transcribe,
+            mock.patch.object(cli, "_log"),
+        ):
+            cues = cli._get_cues(args, Path("movie.mp4"), Path(tmp), None)
+
+        self.assertEqual([cue.sound for cue in cues], [True, False, True])
+        self.assertEqual([cue.text for cue in cues],
+                         ["coughs", "I am coughing", "breathing"])
+        self.assertTrue(transcribe.call_args.kwargs["vad_filter"])
 
 
 class TestLanguages(unittest.TestCase):
@@ -307,8 +387,15 @@ class TestCoerceLines(unittest.TestCase):
         self.assertEqual(translate._coerce_lines(raw, 3), ["one", "two", "three"])
 
     def test_numbered_renders_sound_cues_bracketed(self):
-        cues = [Cue(0, 1, "Hello"), Cue(1, 2, "cry", sound=True)]
-        self.assertEqual(translate._numbered(cues), "1. Hello\n2. [cry]")
+        cues = [
+            Cue(0, 1, "I am coughing"),
+            Cue(1, 2, "coughs", sound=True),
+            Cue(2, 3, "breathing", sound=True),
+        ]
+        self.assertEqual(
+            translate._numbered(cues),
+            "1. I am coughing\n2. [coughs]\n3. [breathing]",
+        )
 
 
 class TestMediaHelpers(unittest.TestCase):
@@ -328,6 +415,40 @@ class TestMediaHelpers(unittest.TestCase):
         from ffmpegsrt import transcribe
         self.assertEqual(transcribe.default_compute_type("cpu"), "int8")
         self.assertEqual(transcribe.default_compute_type("cuda"), "float16")
+
+    def _capture_ffmpeg(self, call):
+        """Run *call* with ``media._run`` stubbed, returning the ffmpeg argv."""
+        seen = []
+
+        def fake_run(cmd, what):
+            seen.append(cmd)
+            Path(cmd[-1]).write_bytes(b"x")   # the callers check the output exists
+
+        with mock.patch.object(media, "_run", fake_run):
+            call()
+        return seen[0]
+
+    def test_video_is_encoded_as_10_bit_hevc(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / "in.srt").write_text("")
+            commands = {
+                "trim": self._capture_ffmpeg(
+                    lambda: media.trim(tmp / "in.mp4", tmp / "clip.mp4", duration=1)
+                ),
+                "burn_in": self._capture_ffmpeg(
+                    lambda: media.burn_in(
+                        tmp / "in.mp4", tmp / "in.srt", tmp / "out.mp4"
+                    )
+                ),
+            }
+
+        for what, cmd in commands.items():
+            with self.subTest(what):
+                self.assertNotIn("libx264", cmd)
+                self.assertEqual(cmd[cmd.index("-c:v") + 1], "libx265")
+                self.assertEqual(cmd[cmd.index("-pix_fmt") + 1], "yuv420p10le")
+                self.assertEqual(cmd[cmd.index("-tag:v") + 1], "hvc1")
 
 
 if __name__ == "__main__":

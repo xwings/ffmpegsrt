@@ -10,9 +10,9 @@ Serves `M1` (transcript to SRT), `M3` (the file libass burns in) and `M4`
 
 ## Status
 
-`done` — `M4` included. Whole-cue markers are detected, tagged, translated as
-labels and rendered bracketed in all three output modes, and they survive an
-SRT round trip so `--srt-in` restores them.
+`done` — `M4` included. Whole-cue markers are detected automatically, tagged,
+translated as labels and rendered bracketed in all three output modes, and
+they survive an SRT round trip so `--srt-in` restores them.
 
 ## Code Structure
 
@@ -80,6 +80,6 @@ python3 test/test_units.py    # pass = exit 0, output ends in "OK"
 - `♪ la la ♪` tags as `[la la]` rather than `[music]` — the label is what was
   heard, but a sung lyric arguably wants different treatment.
 - No SDH conventions beyond the tag itself: no speaker labels, no positioning.
-- `read_srt` does not restore `sound` on its own; `classify` re-detects it. That
-  keeps `srt.py` free of a dependency on `sound.py`, at the cost of `--srt-in`
-  needing `--sound-tags` to be passed again on a resumed run.
+- `read_srt` does not restore `sound` on its own; the automatic ingestion path
+  calls `classify` to re-detect it. That keeps `srt.py` free of a dependency on
+  `sound.py`.
